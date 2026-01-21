@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karaoke Studio</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // Lucide Icons as inline SVG
+        const Music = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+            </svg>
+        );
+
+        const Mic = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="22"></line>
+            </svg>
+        );
+
+        const Download = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+        );
+
+        const Play = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+        );
+
+        const Pause = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+        );
+
+        const Loader = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                <line x1="12" y1="2" x2="12" y2="6"></line>
+                <line x1="12" y1="18" x2="12" y2="22"></line>
+                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                <line x1="2" y1="12" x2="6" y2="12"></line>
+                <line x1="18" y1="12" x2="22" y2="12"></line>
+                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+            </svg>
+        );
+
+        const Trash2 = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+        );
+
+        function KaraokeSystem() {
+            const [youtubeUrl, setYoutubeUrl] = useState('');
+            const [status, setStatus] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [audioData, setAudioData] = useState(null);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [currentTime, setCurrentTime] = useState(0);
+            const [duration, setDuration] = useState(0);
+            const [vocalVolume, setVocalVolume] = useState(0.5);
+            const [instrumentalVolume, setInstrumentalVolume] = useState(1);
+            
+            const vocalAudioRef = useRef(null);
+            const instrumentalAudioRef = useRef(null);
+
+            const API_BASE = 'http://localhost:5000/api';
+
+            const processAudio = async () => {
+                if (!youtubeUrl.trim()) {
+                    setStatus('Please enter a YouTube URL');
+                    return;
+                }
+
+                setLoading(true);
+                setStatus('Downloading audio from YouTube...');
+
+                try {
+                    const response = await fetch(`${API_BASE}/process`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: youtubeUrl })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to process audio');
+                    }
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        setAudioData({
+                            title: data.title,
+                            artist: data.artist,
+                            vocalTrack: `${API_BASE}${data.vocal_url}`,
+                            instrumentalTrack: `${API_BASE}${data.instrumental_url}`,
+                            lyrics: data.lyrics
+                        });
+
+                        if (vocalAudioRef.current) {
+                            vocalAudioRef.current.src = `${API_BASE}${data.vocal_url}`;
+                        }
+                        if (instrumentalAudioRef.current) {
+                            instrumentalAudioRef.current.src = `${API_BASE}${data.instrumental_url}`;
+                        }
+
+                        setStatus('Ready to sing! 🎤');
+                    } else {
+                        setStatus('Error: ' + data.error);
+                    }
+                } catch (error) {
+                    setStatus('Error: ' + error.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleFileUpload = (type, e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const url = URL.createObjectURL(file);
+                
+                if (type === 'vocal') {
+                    if (vocalAudioRef.current) {
+                        vocalAudioRef.current.src = url;
+                    }
+                } else {
+                    if (instrumentalAudioRef.current) {
+                        instrumentalAudioRef.current.src = url;
+                    }
+                }
+
+                setStatus(`${type === 'vocal' ? 'Vocals' : 'Instrumental'} loaded`);
+            };
+
+            const togglePlayback = () => {
+                if (!vocalAudioRef.current || !instrumentalAudioRef.current) return;
+
+                if (isPlaying) {
+                    vocalAudioRef.current.pause();
+                    instrumentalAudioRef.current.pause();
+                } else {
+                    vocalAudioRef.current.play();
+                    instrumentalAudioRef.current.play();
+                }
+                setIsPlaying(!isPlaying);
+            };
+
+            const handleTimeUpdate = () => {
+                if (vocalAudioRef.current) {
+                    setCurrentTime(vocalAudioRef.current.currentTime);
+                }
+            };
+
+            const handleLoadedMetadata = () => {
+                if (vocalAudioRef.current) {
+                    setDuration(vocalAudioRef.current.duration);
+                }
+            };
+
+            const handleSeek = (e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const percentage = x / rect.width;
+                const newTime = percentage * duration;
+                
+                if (vocalAudioRef.current) vocalAudioRef.current.currentTime = newTime;
+                if (instrumentalAudioRef.current) instrumentalAudioRef.current.currentTime = newTime;
+                setCurrentTime(newTime);
+            };
+
+            const clearSong = () => {
+                setAudioData(null);
+                setIsPlaying(false);
+                setCurrentTime(0);
+                setDuration(0);
+                if (vocalAudioRef.current) vocalAudioRef.current.src = '';
+                if (instrumentalAudioRef.current) instrumentalAudioRef.current.src = '';
+                setStatus('');
+            };
+
+            useEffect(() => {
+                if (vocalAudioRef.current) {
+                    vocalAudioRef.current.volume = vocalVolume;
+                }
+                if (instrumentalAudioRef.current) {
+                    instrumentalAudioRef.current.volume = instrumentalVolume;
+                }
+            }, [vocalVolume, instrumentalVolume]);
+
+            const formatTime = (seconds) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            };
+
+            const getCurrentLyric = () => {
+                if (!audioData?.lyrics || audioData.lyrics.length === 0) return '';
+                const current = audioData.lyrics.filter(l => l.time <= currentTime);
+                return current.length > 0 ? current[current.length - 1].text : '';
+            };
+
+            const getNextLyric = () => {
+                if (!audioData?.lyrics || audioData.lyrics.length === 0) return '';
+                const next = audioData.lyrics.find(l => l.time > currentTime);
+                return next ? next.text : '';
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 text-purple-300"><Music /></div>
+                                    <h1 className="text-4xl font-bold text-white">Karaoke Studio</h1>
+                                </div>
+                                {audioData && (
+                                    <button
+                                        onClick={clearSong}
+                                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg flex items-center gap-2 transition-all"
+                                    >
+                                        <div className="w-4 h-4"><Trash2 /></div>
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+
+                            {audioData && (
+                                <div className="mb-6 p-4 bg-white/5 rounded-lg border border-purple-400/30">
+                                    <h2 className="text-2xl font-bold text-white">{audioData.title}</h2>
+                                    <p className="text-purple-200">{audioData.artist}</p>
+                                </div>
+                            )}
+
+                            <div className="mb-8">
+                                <label className="block text-purple-200 mb-2 font-semibold">
+                                    YouTube URL
+                                </label>
+                                <div className="flex gap-3">
+                                    <input
+                                        type="text"
+                                        value={youtubeUrl}
+                                        onChange={(e) => setYoutubeUrl(e.target.value)}
+                                        placeholder="https://youtube.com/watch?v=..."
+                                        className="flex-1 px-4 py-3 rounded-lg bg-white/20 text-white placeholder-purple-300 border border-purple-400/30 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                        disabled={loading}
+                                    />
+                                    <button
+                                        onClick={processAudio}
+                                        disabled={loading}
+                                        className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white rounded-lg font-semibold transition-all flex items-center gap-2"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <div className="w-5 h-5"><Loader /></div>
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="w-5 h-5"><Download /></div>
+                                                Process
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {status && (
+                                <div className={`mb-6 p-4 rounded-lg ${
+                                    status.includes('Error') 
+                                        ? 'bg-red-500/20 border border-red-400/30 text-red-200'
+                                        : 'bg-blue-500/20 border border-blue-400/30 text-blue-200'
+                                }`}>
+                                    {status}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                <div className="bg-white/5 p-4 rounded-lg border border-purple-400/30">
+                                    <label className="block text-purple-200 mb-2 font-semibold flex items-center gap-2">
+                                        <div className="w-5 h-5"><Mic /></div>
+                                        Upload Vocals (for testing)
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="audio/*"
+                                        onChange={(e) => handleFileUpload('vocal', e)}
+                                        className="text-sm text-purple-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700 file:cursor-pointer"
+                                    />
+                                </div>
+                                <div className="bg-white/5 p-4 rounded-lg border border-purple-400/30">
+                                    <label className="block text-purple-200 mb-2 font-semibold flex items-center gap-2">
+                                        <div className="w-5 h-5"><Music /></div>
+                                        Upload Instrumental (for testing)
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="audio/*"
+                                        onChange={(e) => handleFileUpload('instrumental', e)}
+                                        className="text-sm text-purple-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white hover:file:bg-purple-700 file:cursor-pointer"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="bg-white/10 rounded-xl p-6 mb-6">
+                                <div className="flex items-center justify-center mb-4">
+                                    <button
+                                        onClick={togglePlayback}
+                                        className="w-16 h-16 bg-purple-600 hover:bg-purple-700 rounded-full flex items-center justify-center transition-all shadow-lg disabled:opacity-50"
+                                        disabled={!vocalAudioRef.current?.src}
+                                    >
+                                        {isPlaying ? (
+                                            <div className="w-8 h-8 text-white"><Pause /></div>
+                                        ) : (
+                                            <div className="w-8 h-8 text-white ml-1"><Play /></div>
+                                        )}
+                                    </button>
+                                </div>
+
+                                <div className="mb-4">
+                                    <div
+                                        onClick={handleSeek}
+                                        className="h-2 bg-white/20 rounded-full cursor-pointer relative"
+                                    >
+                                        <div
+                                            className="h-full bg-purple-500 rounded-full transition-all"
+                                            style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-sm text-purple-200 mt-1">
+                                        <span>{formatTime(currentTime)}</span>
+                                        <span>{formatTime(duration)}</span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="flex items-center justify-between text-purple-200 mb-2">
+                                            <span className="flex items-center gap-2">
+                                                <div className="w-4 h-4"><Mic /></div>
+                                                Vocals
+                                            </span>
+                                            <span className="text-sm">{Math.round(vocalVolume * 100)}%</span>
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="1"
+                                            step="0.01"
+                                            value={vocalVolume}
+                                            onChange={(e) => setVocalVolume(parseFloat(e.target.value))}
+                                            className="w-full accent-purple-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="flex items-center justify-between text-purple-200 mb-2">
+                                            <span className="flex items-center gap-2">
+                                                <div className="w-4 h-4"><Music /></div>
+                                                Instrumental
+                                            </span>
+                                            <span className="text-sm">{Math.round(instrumentalVolume * 100)}%</span>
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="1"
+                                            step="0.01"
+                                            value={instrumentalVolume}
+                                            onChange={(e) => setInstrumentalVolume(parseFloat(e.target.value))}
+                                            className="w-full accent-purple-500"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-gradient-to-b from-white/5 to-white/10 rounded-xl p-8 min-h-48 flex flex-col items-center justify-center border border-purple-400/30">
+                                <p className="text-4xl font-bold text-white text-center mb-4">
+                                    {getCurrentLyric() || 'Lyrics will appear here...'}
+                                </p>
+                                {getNextLyric() && (
+                                    <p className="text-xl text-purple-300 text-center opacity-60">
+                                        {getNextLyric()}
+                                    </p>
+                                )}
+                            </div>
+
+                            <audio
+                                ref={vocalAudioRef}
+                                onTimeUpdate={handleTimeUpdate}
+                                onLoadedMetadata={handleLoadedMetadata}
+                                onEnded={() => setIsPlaying(false)}
+                            />
+                            <audio ref={instrumentalAudioRef} />
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<KaraokeSystem />, document.getElementById('root'));
+    </script>
+</body>
+</html>
