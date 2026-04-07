@@ -9,7 +9,7 @@
 ![Demucs](https://img.shields.io/badge/Demucs-v4-purple.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-**[Demo Video](#) • [Documentation](#) • [Report Bug](#)**
+**• [Documentation](#) • [Report Bug](#)**
 
 </div>
 
